@@ -160,6 +160,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;backgro
   <div style="padding:40px 24px;text-align:center">
     <div style="font-size:10px;color:var(--accent-gold);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Welcome Back</div>
     <div style="font-size:28px;font-weight:800;font-family:var(--font-display)">Who's active?</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Connected to Flat: <span id="cur-flat-id" style="color:var(--accent-gold);font-weight:700"></span></div>
     <div id="ugrid" class="ugrid" style="margin-left:auto;margin-right:auto"></div>
     <div id="lerr" style="font-size:12px;color:var(--accent-red);margin-top:20px;font-weight:600"></div>
   </div>
@@ -219,6 +220,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;backgro
         <div>
           <div style="font-size:10px;color:var(--text-muted);letter-spacing:2px;font-weight:800;text-transform:uppercase">Dashboard</div>
           <div style="font-size:24px;font-weight:800;margin-top:4px;font-family:var(--font-display)">Hey, <span id="gname" style="color:var(--accent-gold)"></span> 👋</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Flat ID: <span id="h-flat-id"></span></div>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
           <div id="spin" style="width:18px;height:18px;border:2px solid var(--border-default);border-top:2px solid var(--accent-gold);border-radius:50%;animation:spin 1s linear infinite;display:none"></div>
@@ -544,6 +546,7 @@ async function loadUsers() {
 }
 
 function renderLogin() {
+  if ($('cur-flat-id')) $('cur-flat-id').textContent = localStorage.getItem('fm_flat_id');
   var g = $('ugrid');
   g.innerHTML = '';
 
@@ -632,6 +635,7 @@ function doLogin() {
   $('login').style.display = 'none';
   $('app').style.display = 'block';
   $('gname').textContent = ME.name;
+  if ($('h-flat-id')) $('h-flat-id').textContent = localStorage.getItem('fm_flat_id');
   if (ME.is_admin) {
     if (!$('nb-admin')) {
       var nb = document.createElement('button');
@@ -1371,7 +1375,11 @@ export default {
       if (p === "/users" && req.method === "POST") {
         const { name, pin, color } = await req.json();
         if (!name?.trim() || !pin) return er("Name and PIN required");
+        // Sync with users table
         await DB.prepare("INSERT INTO users(flat_id,name,pin,color)VALUES(?,?,?,?)").bind(flat_id, name.trim(), String(pin), color || "#C9A84C").run();
+        // Sync with members table
+        await DB.prepare("INSERT OR IGNORE INTO members(flat_id,name)VALUES(?,?)").bind(flat_id, name.trim()).run();
+        
         const { results } = await DB.prepare("SELECT id,name,color FROM users WHERE flat_id=? ORDER BY created_at ASC").bind(flat_id).all();
         return ok(results);
       }
@@ -1393,7 +1401,11 @@ export default {
       if (p === "/members" && req.method === "POST") {
         const { name } = await req.json();
         if (!name?.trim()) return er("Name required");
+        // Sync with members table
         await DB.prepare("INSERT OR IGNORE INTO members(flat_id,name)VALUES(?,?)").bind(flat_id, name.trim()).run();
+        // Also ensure they have a user entry (default PIN 1234)
+        await DB.prepare("INSERT OR IGNORE INTO users(flat_id,name,pin)VALUES(?,?,?)").bind(flat_id, name.trim(), "1234").run();
+        
         const { results } = await DB.prepare("SELECT name, spend_limit FROM members WHERE flat_id=? ORDER BY created_at ASC").bind(flat_id).all();
         return ok(results);
       }
