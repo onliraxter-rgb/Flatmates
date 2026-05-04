@@ -231,7 +231,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;backgro
     <div style="padding:16px 16px 0">
       <div class="stat-grid" id="stats"></div>
       
-      <div id="ualert" class="ualert" style="display:none" onclick="go('chat')">
+      <div id="ualert" class="ualert" style="display:none" onclick="go('needs')">
         <div style="width:8px;height:8px;border-radius:50%;background:var(--accent-blue);flex-shrink:0;animation:pulse 1.5s ease infinite;box-shadow:0 0 10px var(--accent-blue)"></div>
         <div id="utext" style="flex:1;font-size:13px;font-weight:700;color:var(--accent-blue)">New messages in group chat</div>
         <span style="color:var(--text-muted)">→</span>
@@ -314,7 +314,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;backgro
         </button>
         <img id="pprev" style="width:100%;border-radius:12px;margin-top:8px;max-height:140px;object-fit:cover;display:none">
         <div style="display:flex;gap:8px;margin-top:20px">
-          <button class="btn2" style="flex:1" onclick="gs(2)">← Back</button>
+          <button class="btn2" style="flex:1" onclick="AF.type==='deposit'?gs(1):gs(2)">← Back</button>
           <button class="btn" id="svbtn" style="flex:2" onclick="saveExp()">Save & Sync ✓</button>
         </div>
       </div>
@@ -432,6 +432,22 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;backgro
     </div>
   </div>
 
+  <!-- NEEDS -->
+  <div class="page" id="pg-needs">
+    <div class="hdr">
+      <button class="back" onclick="go('home')">←</button>
+      <div class="htitle">Shopping Needs</div>
+    </div>
+    <div style="padding:14px 16px 0">
+      <div class="card" style="display:flex;gap:8px">
+        <input class="inp" id="need-inp" placeholder="Add item..." style="flex:1">
+        <button onclick="toggleUrgent()" id="urg-btn" style="background:var(--bg-input);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:10px 12px;cursor:pointer;color:var(--text-muted);font-size:16px" title="Mark urgent">🔴</button>
+        <button class="btn" onclick="addNeed()" style="width:auto;padding:10px 16px">Add</button>
+      </div>
+      <div id="nlist" style="margin-top:12px"></div>
+    </div>
+  </div>
+
   <!-- MEMBERS -->
   <div class="page" id="pg-members">
     <div class="hdr">
@@ -447,6 +463,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;backgro
     <button class="nb" id="nb-calendar" onclick="go('calendar')"><span style="font-size:18px">◫</span>Calendar<div class="nb-bar"></div></button>
     <button class="nb" id="nb-chat" onclick="go('chat')"><span style="font-size:18px">💬</span>Chat<div class="nb-bar"></div></button>
     <button class="nb" id="nb-advisor" onclick="go('advisor')"><span style="font-size:18px">◉</span>Advisor<div class="nb-bar"></div></button>
+    <button class="nb" id="nb-needs" onclick="go('needs')"><span style="font-size:18px">🛒</span>Needs<div class="nb-bar"></div></button>
     <button class="nb" id="nb-members" onclick="go('members')"><span style="font-size:18px">◎</span>Members<div class="nb-bar"></div></button>
     <button class="nb" id="nb-superadmin" style="display:none"><span style="font-size:18px">⚙️</span>System<div class="nb-bar"></div></button>
   </nav>
@@ -477,7 +494,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;backgro
 
 <script>
 // ─── STATE ───────────────────────────────────────────────────────────────────
-var S = { users:[], members:[], expenses:[], messages:[] };
+var S = { users:[], members:[], expenses:[], messages:[], needs:[] };
 var ME = null;
 var PIN_TARGET = null, PIN_VAL = '';
 var AF = { cat:{icon:'🛒',label:'Groceries'}, paidBy:'', split:[], type:'expense' };
@@ -689,11 +706,13 @@ async function loadAll(quiet) {
     var res = await Promise.all([
       api('GET', '/members'),
       api('GET', '/expenses'),
-      api('GET', '/messages')
+      api('GET', '/messages'),
+      api('GET', '/needs')
     ]);
     if (res[0].ok) S.members = res[0].data;
     if (res[1].ok) S.expenses = res[1].data;
     if (res[2].ok) S.messages = res[2].data;
+    if (res[3].ok) { S.needs = res[3].data; rNeeds(); }
     if (!quiet && S.messages.length > LAST_MSG_COUNT && ME) {
       if (S.messages[S.messages.length-1].sender !== ME.name) $('ualert').style.display = 'flex';
     }
@@ -776,9 +795,7 @@ function rHome() {
     ? rec.map(eRow).join('')
     : '<div style="color:#444;text-align:center;padding:28px 0;font-size:13px">No expenses yet — tap Add above</div>';
 
-  var mb = $('moreBtn');
-  if (S.expenses.length > 5) { mb.style.display='block'; mb.textContent='View all '+S.expenses.length+' →'; }
-  else mb.style.display = 'none';
+  // moreBtn removed from HTML — "See all" button in header handles this
 }
 
 function sbox(v,l,c) { 
@@ -1053,20 +1070,6 @@ function setTxType(t) {
     $('catg').style.display='none';
   }
 }
-function setTxType(t) {
-  AF.type = t;
-  if(t==='expense') {
-    $('type-exp').style.border='1px solid #fff'; $('type-exp').style.background='rgba(255,255,255,.1)'; $('type-exp').style.color='#fff';
-    $('type-dep').style.border='1px solid #333'; $('type-dep').style.background='transparent'; $('type-dep').style.color='#555';
-    $('st1-t').textContent='What was bought?'; $('st1-s').textContent='Name and total amount paid'; $('lbl-n').textContent='Expense Name';
-    $('catg').style.display='grid';
-  } else {
-    $('type-dep').style.border='1px solid #fff'; $('type-dep').style.background='rgba(255,255,255,.1)'; $('type-dep').style.color='#fff';
-    $('type-exp').style.border='1px solid #333'; $('type-exp').style.background='transparent'; $('type-exp').style.color='#555';
-    $('st1-t').textContent='Add Funds to Bank'; $('st1-s').textContent='Who is adding and how much'; $('lbl-n').textContent='Note / Title';
-    $('catg').style.display='none';
-  }
-}
 function selC(i,l){ AF.cat={icon:i,label:l}; rChips(); }
 
 function updShare() {
@@ -1100,8 +1103,9 @@ function gs(n) {
 
 function ns(n) {
   if (n===2 && (!$('ft').value.trim() || !$('fa').value)) { toast('Fill name & amount','err'); return; }
-  if (n===2) { gs(3); return; } // Skip Split step as requested
-  if (n===3 && (!AF.paidBy || !AF.split.length)) { toast('Select payer & members','err'); return; }
+  if (n===2 && AF.type==='deposit') { gs(3); return; } // Skip Split step for deposits
+  if (n===2) { gs(2); return; }
+  if (n===3 && AF.type!=='deposit' && (!AF.paidBy || !AF.split.length)) { toast('Select payer & members','err'); return; }
   gs(n);
 }
 
@@ -1127,7 +1131,7 @@ async function saveExp() {
       title:title, amount:amount,
       catIcon:AF.cat.icon, catLabel:AF.cat.label,
       paidBy:AF.paidBy, splitAmong:AF.split,
-      date:$('fd').value, note:$('fn').value, screenshot:PIC||'', type:AF.type, type:AF.type
+      date:$('fd').value, note:$('fn').value, screenshot:PIC||'', type:AF.type
     });
     if (r.ok) { S.expenses=r.data; render(); toast('✓ Saved!'); go('home'); }
     else toast(r.error||'Failed','err');
@@ -1183,12 +1187,96 @@ async function saveLimit(name) {
         + '</div>';
     }).join('');
   }
+// ─── NEEDS ───────────────────────────────────────────────────────────────────
+var NEED_URGENT = false;
+function toggleUrgent() {
+  NEED_URGENT = !NEED_URGENT;
+  $('urg-btn').style.color = NEED_URGENT ? 'var(--accent-red)' : 'var(--text-muted)';
+  $('urg-btn').style.borderColor = NEED_URGENT ? 'var(--accent-red)' : 'var(--border-default)';
+}
+async function addNeed() {
+  var item = $('need-inp').value.trim();
+  if (!item || !ME) { toast('Enter an item','err'); return; }
+  try {
+    var r = await api('POST', '/needs', { item:item, urgent:NEED_URGENT, added_by:ME.name });
+    if (r.ok) { 
+      $('need-inp').value = ''; NEED_URGENT = false;
+      toggleUrgent(); toggleUrgent(); // reset visual
+      await loadNeeds(); toast('Added: ' + item);
+    }
+  } catch(e) { toast('Error','err'); }
+}
+async function checkNeed(id) {
+  try {
+    var r = await api('PATCH', '/needs/'+id, {});
+    if (r.ok) await loadNeeds();
+  } catch(e) {}
+}
+async function loadNeeds() {
+  try {
+    var r = await api('GET', '/needs');
+    if (r.ok) {
+      S.needs = r.data;
+      rNeeds();
+      var urg = r.data.filter(function(n){ return n.urgent && !n.done; }).length;
+      var ut = $('utext'), ua = $('ualert');
+      if (urg > 0 && ua) { ua.style.display='flex'; ut.textContent = urg+' urgent item'+(urg>1?'s':'')+' needed!'; }
+      else if (ua) ua.style.display='none';
+    }
+  } catch(e) {}
+}
+function rNeeds() {
+  var nl = $('nlist'); if (!nl) return;
+  if (!S.needs || !S.needs.length) { nl.innerHTML='<div style="color:var(--text-muted);text-align:center;padding:40px 0;font-size:13px">No items in the list 🎉</div>'; return; }
+  nl.innerHTML = S.needs.map(function(n) {
+    return '<div class="nrow'+(n.urgent?' urg':'')+'">'
+      +'<div class="nchk" onclick="checkNeed('+n.id+')" style="cursor:pointer;display:flex;align-items:center;justify-content:center">'
+      +(n.done?'✓':'')+'</div>'
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:700'+(n.done?';text-decoration:line-through;opacity:0.4':'')+'">'
+      +(n.urgent?'<span style="color:var(--accent-red);font-size:10px;font-weight:800;letter-spacing:1px;margin-right:6px">URGENT</span>':'')
+      +n.item+'</div>'
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">by '+n.added_by+'</div></div></div>';
+  }).join('');
+}
+
+async function remMem(name) {
+  if (!confirm('Remove ' + name + ' from flat?')) return;
+  try {
+    var r = await api('DELETE', '/members/' + encodeURIComponent(name));
+    if (r.ok) { S.members = r.data; render(); toast(name + ' removed'); }
+    else toast(r.error || 'Failed', 'err');
+  } catch(e) { toast('Network error', 'err'); }
+}
+
+async function adjPool() {
+  var inp = $('adm-pool');
+  var amt = parseFloat(inp.value);
+  if (!amt || isNaN(amt)) { toast('Enter a valid amount', 'err'); return; }
+  try {
+    var r = await api('POST', '/expenses', {
+      title: 'Admin Adjustment',
+      amount: amt,
+      catIcon: '⚙️',
+      catLabel: 'Adjustment',
+      paidBy: 'Admin',
+      splitAmong: [],
+      date: today(),
+      note: 'Manual pool adjustment by admin',
+      screenshot: '',
+      type: 'deposit'
+    });
+    if (r.ok) { S.expenses = r.data; render(); inp.value = ''; toast('Pool adjusted by ' + fmt(amt)); }
+    else toast(r.error || 'Failed', 'err');
+  } catch(e) { toast('Network error', 'err'); }
+}
+
 function go(id) {
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
   document.querySelectorAll('.nb').forEach(function(b){ b.classList.remove('on'); });
   var pg = $('pg-'+id); if (pg) pg.classList.add('active');
   var nb = $('nb-'+id); if (nb) nb.classList.add('on');
   if (id === 'calendar') rCal();
+  if (id === 'needs') { loadNeeds(); }
   if (id === 'admin') rAdmin();
   if (id === 'chat') { rChat(); $('ualert').style.display = 'none'; }
   if (id === 'superadmin') rSuperAdmin();
@@ -1205,6 +1293,7 @@ async function loginFlat() {
     var r = await api('POST', '/flats/login', { id:id, password:pass });
     if(r.ok) {
       localStorage.setItem('fm_flat_id', id);
+      $('flatlogin').classList.add('hidden');
       $('flatlogin').style.display = 'none';
       if (id === 'fm_admin') {
         $('app').style.display = 'block';
@@ -1586,7 +1675,7 @@ export default {
 
         // Step 2: Groq Text Extraction (Agentic)
         const prompt = `User '${sender}' uploaded a receipt. OCR text:
-        ${extractedText}
+        \${extractedText}
         
         Act as FlatBot. Review the text, find the total amount and a 2-word title. 
         Confirm you've added it in Hinglish.
