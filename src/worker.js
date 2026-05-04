@@ -515,7 +515,7 @@ function toast(msg, type) {
   _toastT = setTimeout(function(){ el.style.display = 'none'; }, 2600);
 }
 
-function spinning(on) { $('spin').style.display = on ? 'block' : 'none'; }
+function spinning(on) { var s = $('spin'); if (s) s.style.display = on ? 'block' : 'none'; }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 async function api(method, path, body) {
@@ -1202,6 +1202,12 @@ async function loginFlat() {
     if(r.ok) {
       localStorage.setItem('fm_flat_id', id);
       $('flatlogin').classList.add('hidden');
+      if (id === 'fm_admin') {
+        $('app').classList.remove('hidden');
+        document.querySelector('nav').innerHTML = '<button class="nb on" style="width:100%" onclick="go(\'superadmin\')"><span style="font-size:18px">⚙️</span>System Dashboard</button>';
+        go('superadmin');
+        return;
+      }
       $('login').classList.remove('hidden');
       await loadUsers();
     } else {
@@ -1278,7 +1284,7 @@ function exitFlat() {
 
   if (fid === 'fm_admin') {
     $('login').classList.add('hidden');
-    $('main').classList.remove('hidden');
+    $('app').classList.remove('hidden');
     document.querySelector('nav').innerHTML = '<button class="nb on" style="width:100%" onclick="go(\'superadmin\')"><span style="font-size:18px">⚙️</span>System Dashboard</button>';
     go('superadmin');
     return;
