@@ -335,24 +335,12 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;backgro
         </div>
         <div style="font-size:10px;color:#555;margin-top:6px">This adds a special "Adjustment" deposit to the bank.</div>
       </div>
-      <div class="sec">Manage Members</div>
+      <div class="sec">Manage Members & Limits</div>
       <div id="admin-mlist"></div>
       
       <div class="line"></div>
       <div class="sec">Platform Actions</div>
       <button class="btn2" style="border-color:var(--accent-red);color:var(--accent-red)" onclick="exitFlat()">🚪 Switch Flat / Logout</button>
-    </div>
-  </div>
-
-  <!-- ADMIN -->
-  <div class="page" id="pg-admin">
-    <div class="hdr">
-      <button class="back" onclick="go('home')">←</button>
-      <div class="htitle">Admin Settings</div>
-    </div>
-    <div style="padding:14px 16px 0">
-      <div class="sec">Set Member Spending Limits</div>
-      <div id="admin-mlist"></div>
     </div>
   </div>
 
@@ -635,15 +623,6 @@ function doLogin() {
   $('login').style.display = 'none';
   $('app').style.display = 'block';
   $('gname').textContent = ME.name;
-  if (ME.is_admin) {
-    if (!$('nb-admin')) {
-      var nb = document.createElement('button');
-      nb.className = 'nb'; nb.id = 'nb-admin';
-      nb.innerHTML = '<span style="font-size:18px">⚙</span>Admin<div class="nb-bar"></div>';
-      nb.onclick = function(){ go('admin'); };
-      document.querySelector('nav').appendChild(nb);
-    }
-  }
   if (ME.is_admin) {
     if (!$('nb-admin')) {
       var nb = document.createElement('button');
@@ -1173,7 +1152,7 @@ async function saveLimit(name) {
     var val = parseFloat($('lim-'+name).value) || 0;
     try {
       var r = await api('PUT', '/members/'+encodeURIComponent(name), {spend_limit: val});
-      if (r.ok) { S.members = r.data; toast('Limit saved'); }
+      if (r.ok) { S.members = r.data; toast('Limit saved'); render(); }
     } catch(e) { toast('Error', 'err'); }
   }
   function rAdmin() {
@@ -1182,49 +1161,12 @@ async function saveLimit(name) {
         + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
         + av(m.name, 32)
         + '<div style="flex:1;font-size:14px;font-weight:700">'+m.name+'</div>'
-        + '<button onclick="remMem(&#39;'+m.name+'&#39;)" style="background:none;border:none;color:#f55;font-size:11px;cursor:pointer">Remove Member</button>'
+        + '<button onclick="remMem(&#39;'+m.name+'&#39;)" style="background:none;border:none;color:#f55;font-size:11px;cursor:pointer">Remove</button>'
         + '</div>'
         + '<div style="display:flex;gap:8px">'
         + '<input class="inp" type="number" id="lim-'+m.name+'" value="'+(m.spend_limit||0)+'" style="flex:1;padding:8px" placeholder="Limit">'
         + '<button class="btn" style="width:auto;padding:8px 12px" onclick="saveLimit(&#39;'+m.name+'&#39;)">Set Limit</button>'
         + '</div>'
-        + '</div>';
-    }).join('');
-  }
-
-  async function remMem(name) {
-    if(!confirm('Remove '+name+'? Their history will stay but they will be removed from current lists.')) return;
-    try {
-      var r = await api('DELETE', '/members/'+encodeURIComponent(name));
-      if(r.ok) { S.members = r.data; rAdmin(); toast('Member removed'); }
-    } catch(e) { toast('Error', 'err'); }
-  }
-
-  async function adjPool() {
-    var val = parseFloat($('adm-pool').value);
-    if(!val) return;
-    try {
-      var r = await api('POST', '/expenses', {
-        title:'Admin Pool Adjustment', amount:val, catIcon:'⚙️', catLabel:'Adjustment',
-        paidBy:'Admin', splitAmong:[], date:today(), note:'Manual adjustment', screenshot:'', type:'deposit'
-      });
-      if(r.ok) { S.expenses=r.data; render(); $('adm-pool').value=''; toast('Pool adjusted'); }
-    } catch(e) {}
-  }
-async function saveLimit(name) {
-    var val = parseFloat($('lim-'+name).value) || 0;
-    try {
-      var r = await api('PUT', '/members/'+encodeURIComponent(name), {spend_limit: val});
-      if (r.ok) { S.members = r.data; toast('Limit saved'); }
-    } catch(e) { toast('Error', 'err'); }
-  }
-  function rAdmin() {
-    $('admin-mlist').innerHTML = S.members.map(function(m) {
-      return '<div class="card" style="display:flex;align-items:center;gap:10px">'
-        + av(m.name, 32)
-        + '<div style="flex:1;font-size:14px;font-weight:700">'+m.name+'</div>'
-        + '<input class="inp" type="number" id="lim-'+m.name+'" value="'+(m.spend_limit||0)+'" style="width:100px;padding:8px" placeholder="Limit">'
-        + '<button class="btn" style="width:auto;padding:8px 12px" onclick="saveLimit(&#39;'+m.name+'&#39;)">Save</button>'
         + '</div>';
     }).join('');
   }
@@ -1234,7 +1176,6 @@ function go(id) {
   var pg = $('pg-'+id); if (pg) pg.classList.add('active');
   var nb = $('nb-'+id); if (nb) nb.classList.add('on');
   if (id === 'calendar') rCal();
-  if (id === 'admin') rAdmin();
   if (id === 'admin') rAdmin();
   if (id === 'chat') { rChat(); $('ualert').style.display = 'none'; }
   if (id === 'superadmin') rSuperAdmin();
