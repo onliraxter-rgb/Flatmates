@@ -1201,9 +1201,9 @@ async function loginFlat() {
     var r = await api('POST', '/flats/login', { id:id, password:pass });
     if(r.ok) {
       localStorage.setItem('fm_flat_id', id);
-      $('flatlogin').classList.add('hidden');
+      $('flatlogin').style.display = 'none';
       if (id === 'fm_admin') {
-        $('app').classList.remove('hidden');
+        $('app').style.display = 'block';
         document.querySelector('nav').innerHTML = '<button class="nb on" style="width:100%" onclick="go(\'superadmin\')"><span style="font-size:18px">⚙️</span>System Dashboard</button>';
         go('superadmin');
         return;
@@ -1284,7 +1284,7 @@ function exitFlat() {
 
   if (fid === 'fm_admin') {
     $('login').classList.add('hidden');
-    $('app').classList.remove('hidden');
+    $('app').style.display = 'block';
     document.querySelector('nav').innerHTML = '<button class="nb on" style="width:100%" onclick="go(\'superadmin\')"><span style="font-size:18px">⚙️</span>System Dashboard</button>';
     go('superadmin');
     return;
