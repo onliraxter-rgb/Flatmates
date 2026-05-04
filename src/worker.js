@@ -452,12 +452,21 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;backgro
   <!-- SUPER ADMIN -->
   <div class="page" id="pg-superadmin">
     <div class="hdr">
-      <button class="back" onclick="go('home')">←</button>
-      <div class="htitle">System Control</div>
+      <div class="htitle">System Control Panel</div>
     </div>
     <div style="padding:14px 16px 0">
+      <div class="sec">Register New Flat</div>
+      <div class="card" style="margin-bottom:20px">
+        <input class="inp" id="new-flat-id" placeholder="New Flat ID (e.g. flat_1)" style="margin-bottom:10px">
+        <input class="inp" id="new-flat-pass" placeholder="Password" style="margin-bottom:10px">
+        <button class="btn" onclick="createFlat()">Create Flat Tenant</button>
+      </div>
+
       <div class="sec">Active Tenants</div>
-      <div id="flatlist"></div>
+      <div id="flatlist" style="display:flex;flex-direction:column;gap:10px"></div>
+      
+      <div class="line" style="margin-top:20px"></div>
+      <button class="btn2" style="border-color:var(--accent-red);color:var(--accent-red)" onclick="exitFlat()">🚪 Logout Admin</button>
     </div>
   </div>
 </div>
@@ -685,7 +694,7 @@ async function loadAll(quiet) {
       if (S.messages[S.messages.length-1].sender !== ME.name) $('ualert').style.display = 'flex';
     }
     LAST_MSG_COUNT = S.messages.length;
-    render();
+    try { render(); } catch(err) { console.error('Render crash:', err); }
   } catch(e) {
     if (!quiet) toast('Connection error', 'err');
   }
@@ -701,8 +710,8 @@ function getBals() {
       var py = e.paid_by || e.paidBy;
       if (py in b) b[py].gave += e.amount;
     } else {
-      var sp = Array.isArray(e.splitAmong) ? e.splitAmong : JSON.parse(e.split_among || '[]');
-      if (!sp.length) return;
+      var sp = Array.isArray(e.splitAmong) ? e.splitAmong : [];
+      if (!sp || !sp.length) return;
       var share = e.amount / sp.length;
       sp.forEach(function(m){ if (m in b) b[m].spent += share; });
     }
@@ -796,7 +805,7 @@ function rHistory() {
     return;
   }
   $('hlist').innerHTML = S.expenses.map(function(e) {
-    var sp = Array.isArray(e.splitAmong) ? e.splitAmong : JSON.parse(e.split_among || '[]');
+    var sp = Array.isArray(e.splitAmong) ? e.splitAmong : [];
     var py = e.paid_by || e.paidBy;
     var ic = e.cat_icon || e.catIcon || '📦';
     var isDep = e.type === 'deposit';
@@ -1231,6 +1240,25 @@ async function toggleFlat(id, status) {
   } catch(e) {}
 }
 
+async function createFlat() {
+  var fid = $('new-flat-id').value.trim();
+  var fpass = $('new-flat-pass').value.trim();
+  if(!fid || !fpass) return toast('Fill all fields', 'err');
+  spinning(true);
+  try {
+    var r = await api('POST', '/flats', { id:fid, password:fpass });
+    if(r.ok) { 
+      toast('Flat Created'); 
+      $('new-flat-id').value=''; 
+      $('new-flat-pass').value='';
+      rSuperAdmin(); 
+    } else {
+      toast(r.error || 'Failed', 'err');
+    }
+  } catch(e) { toast('Error', 'err'); }
+  spinning(false);
+}
+
 function exitFlat() {
   if(!confirm('Logout from this flat?')) return;
   localStorage.removeItem('fm_flat_id');
@@ -1249,8 +1277,11 @@ function exitFlat() {
   $('login').classList.remove('hidden');
 
   if (fid === 'fm_admin') {
-    $('nb-superadmin').style.display = 'flex';
-    $('nb-superadmin').onclick = function(){ go('superadmin'); };
+    $('login').classList.add('hidden');
+    $('main').classList.remove('hidden');
+    document.querySelector('nav').innerHTML = '<button class="nb on" style="width:100%" onclick="go(\'superadmin\')"><span style="font-size:18px">⚙️</span>System Dashboard</button>';
+    go('superadmin');
+    return;
   }
 
   // Try auto-login from saved session
@@ -1299,6 +1330,14 @@ export default {
         const data = await DB.prepare("SELECT * FROM flats").all();
         return ok(data.results);
       }
+      if (p === "/flats" && req.method === "POST") {
+        if (flat_id !== "fm_admin") return er("Unauthorized", 403);
+        const { id, password } = await req.json();
+        try {
+          await DB.prepare("INSERT INTO flats(id,password,name) VALUES(?,?,?)").bind(id, password, id).run();
+          return ok({ success: true });
+        } catch(e) { return er("Flat ID already exists", 400); }
+      }
       if (p === "/flats/status" && req.method === "POST") {
         if (flat_id !== "fm_admin") return er("Unauthorized", 403);
         const { id, status } = await req.json();
@@ -1309,6 +1348,9 @@ export default {
       // FLATS
       if (p === "/flats/login" && req.method === "POST") {
         const { id, password } = await req.json();
+        if (id === "fm_admin" && password === "superadmin") {
+          return ok({ id: "fm_admin", name: "System Admin", status: "active", plan: "pro" });
+        }
         const { results } = await DB.prepare("SELECT * FROM flats WHERE id=? AND password=?").bind(id, password).all();
         if (!results.length) return er("Invalid Flat ID or Password", 401);
         if (results[0].status === 'suspended') return er("Your flat access has been suspended by the platform admin.", 403);
@@ -1384,7 +1426,11 @@ export default {
       // EXPENSES
       if (p === "/expenses" && req.method === "GET") {
         const { results } = await DB.prepare("SELECT * FROM expenses WHERE flat_id=? ORDER BY created_at DESC").bind(flat_id).all();
-        return ok(results.map(e => ({ ...e, splitAmong: JSON.parse(e.split_among || "[]") })));
+        return ok(results.map(e => {
+          let sp = [];
+          try { sp = JSON.parse(e.split_among || "[]"); } catch(err) {}
+          return { ...e, splitAmong: sp };
+        }));
       }
       if (p === "/expenses" && req.method === "POST") {
         const e = await req.json();
@@ -1393,12 +1439,20 @@ export default {
         await DB.prepare("INSERT INTO expenses(flat_id,title,amount,cat_icon,cat_label,paid_by,split_among,date,note,screenshot,type)VALUES(?,?,?,?,?,?,?,?,?,?,?)")
           .bind(flat_id, e.title, +e.amount, e.catIcon||"📦", e.catLabel||"Other", e.paidBy, JSON.stringify(e.splitAmong||[]), e.date, e.note||"", shot, e.type||"expense").run();
         const { results } = await DB.prepare("SELECT * FROM expenses WHERE flat_id=? ORDER BY created_at DESC").bind(flat_id).all();
-        return ok(results.map(e => ({ ...e, splitAmong: JSON.parse(e.split_among || "[]") })));
+        return ok(results.map(e => {
+          let sp = [];
+          try { sp = JSON.parse(e.split_among || "[]"); } catch(err) {}
+          return { ...e, splitAmong: sp };
+        }));
       }
       if (p.startsWith("/expenses/") && req.method === "DELETE") {
         await DB.prepare("DELETE FROM expenses WHERE id=? AND flat_id=?").bind(p.slice(10), flat_id).run();
         const { results } = await DB.prepare("SELECT * FROM expenses WHERE flat_id=? ORDER BY created_at DESC").bind(flat_id).all();
-        return ok(results.map(e => ({ ...e, splitAmong: JSON.parse(e.split_among || "[]") })));
+        return ok(results.map(e => {
+          let sp = [];
+          try { sp = JSON.parse(e.split_among || "[]"); } catch(err) {}
+          return { ...e, splitAmong: sp };
+        }));
       }
 
       // MESSAGES (Agentic Chat)
@@ -1454,7 +1508,11 @@ export default {
         
         const { results } = await DB.prepare("SELECT * FROM messages WHERE flat_id=? ORDER BY created_at ASC LIMIT 100").bind(flat_id).all();
         const exps = await DB.prepare("SELECT * FROM expenses WHERE flat_id=? ORDER BY created_at DESC").bind(flat_id).all();
-        return ok({ messages: results, expenses: exps.results.map(e => ({ ...e, splitAmong: JSON.parse(e.split_among || "[]") })) });
+        return ok({ messages: results, expenses: exps.results.map(e => {
+          let sp = [];
+          try { sp = JSON.parse(e.split_among || "[]"); } catch(err) {}
+          return { ...e, splitAmong: sp };
+        }) });
       }
       if (p.startsWith("/messages/") && req.method === "DELETE") {
         await DB.prepare("DELETE FROM messages WHERE id=? AND flat_id=?").bind(p.slice(10), flat_id).run();
