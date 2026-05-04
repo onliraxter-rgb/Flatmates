@@ -568,13 +568,6 @@ function renderLogin() {
 
   var adminCard = document.createElement('div');
   adminCard.className = 'ucard';
-  adminCard.style.borderStyle = 'dashed';
-  adminCard.innerHTML = '<div class="uav" style="background:var(--bg-input);color:var(--text-muted);">⚙️</div><div class="uname">Control</div><div class="uhint">Admin</div>';
-  adminCard.onclick = function(){ startPin({id: "admin", name: "Admin", is_admin: 1}); };
-  g.appendChild(adminCard);
-
-  var adminCard = document.createElement('div');
-  adminCard.className = 'ucard';
   adminCard.innerHTML = '<div class="uav" style="background:#555;color:#fff;">A</div><div class="uname">Admin</div><div class="uhint">Admin Access</div>';
   adminCard.onclick = function(){ startPin({id: "admin", name: "Admin", is_admin: 1}); };
   g.appendChild(adminCard);
